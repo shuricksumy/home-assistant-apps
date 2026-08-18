@@ -1,0 +1,36 @@
+#!/usr/bin/with-contenv bashio
+
+# Get config values
+export SERVER_HOST=$(bashio::config 'server_host')
+export SERVER_PORT=$(bashio::config 'server_port')
+# Must match "ingress_port" in config.json. Hardcoded rather than read from the
+# Supervisor API so the addon does not need the hassio_api role.
+export INGRESS_PORT=8099
+
+bashio::log.info "Starting Music Assistant Proxy..."
+bashio::log.info "Upstream: ${SERVER_HOST}:${SERVER_PORT}"
+bashio::log.info "Ingress port: ${INGRESS_PORT}"
+
+# Render the config from the template on every boot, so changing the addon
+# options actually takes effect. Never write back over the template itself.
+envsubst '${SERVER_HOST} ${SERVER_PORT} ${INGRESS_PORT}' \
+    < /etc/nginx/templates/nginx.conf.template \
+    > /etc/nginx/nginx.conf
+
+# Optional bearer token. This authenticates plain HTTP requests only; the web UI
+# authenticates in-band over the websocket, so it does not replace logging in.
+if bashio::config.has_value 'ma_token'; then
+    bashio::log.info "Bearer token configured, injecting Authorization header"
+    printf 'proxy_set_header Authorization "Bearer %s";\n' \
+        "$(bashio::config 'ma_token')" > /etc/nginx/auth.conf
+else
+    : > /etc/nginx/auth.conf
+fi
+
+# Create required directories
+mkdir -p /var/log/nginx /var/lib/nginx/tmp
+chown nginx:nginx /var/lib/nginx/tmp
+
+bashio::log.info "Starting Nginx..."
+exec 2>&1
+exec nginx -g 'daemon off;'
