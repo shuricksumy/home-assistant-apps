@@ -23,6 +23,7 @@ store.
 | Add-on | Description |
 | ------ | ----------- |
 | [Music Assistant Proxy](music_assistant_proxy) | Puts a Music Assistant server running on another machine into the Home Assistant sidebar |
+| [Frigate Yard Stats Proxy](frigate_yard_stats_proxy) | Puts a Frigate Yard Stats report UI running on another machine into the Home Assistant sidebar |
 
 ### Music Assistant Proxy
 
@@ -40,6 +41,14 @@ It also works around a quirk of the current Music Assistant release, which decid
 is running as an add-on purely from the URL and then refuses to show a login form.
 [The add-on docs](music_assistant_proxy/DOCS.md) explain what is rewritten and why,
 how signing in works, and what to expect when Music Assistant updates.
+
+### Frigate Yard Stats Proxy
+
+Same idea for [Frigate Yard Stats](https://github.com/shuricksumy/frigate-yard-stats):
+the report UI runs alongside Frigate on its own hardware, and this puts it in the
+sidebar. Unlike the Music Assistant proxy it does no response rewriting — that service
+resolves its own URLs relative to the page, so nothing here is pinned to an upstream
+version. See [its docs](frigate_yard_stats_proxy/DOCS.md).
 
 ## License
 

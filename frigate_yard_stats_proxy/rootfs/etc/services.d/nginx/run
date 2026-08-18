@@ -1,0 +1,89 @@
+#!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
+
+# Get config values. server_host is accepted as a bare host, or as a full URL so
+# that a service published through a reverse proxy can be given as-is.
+RAW_HOST=$(bashio::config 'server_host' | tr -d '[:space:]')
+SERVER_PORT=$(bashio::config 'server_port')
+
+SCHEME=http
+case "${RAW_HOST}" in
+    https://*) SCHEME=https; RAW_HOST=${RAW_HOST#https://} ;;
+    http://*)  SCHEME=http;  RAW_HOST=${RAW_HOST#http://} ;;
+esac
+RAW_HOST=${RAW_HOST%%/*}
+
+case "${RAW_HOST}" in
+    \[*\]:*)  HOST=${RAW_HOST%:*};  PORT=${RAW_HOST##*:} ;;
+    \[*\])    HOST=${RAW_HOST};     PORT=${SERVER_PORT}  ;;
+    *:*)      HOST=${RAW_HOST%%:*}; PORT=${RAW_HOST##*:} ;;
+    *)        HOST=${RAW_HOST};     PORT=${SERVER_PORT}  ;;
+esac
+
+if [ -z "${HOST}" ]; then
+    bashio::log.error "server_host is empty. Set it to the address of your Yard Stats server."
+    sleep 10
+    bashio::exit.nok
+fi
+
+export UPSTREAM="${SCHEME}://${HOST}:${PORT}"
+
+# A reverse proxy routes on the Host header, so send the upstream's own name
+# rather than the address the browser used.
+if { [ "${SCHEME}" = https ] && [ "${PORT}" = 443 ]; } \
+    || { [ "${SCHEME}" = http ] && [ "${PORT}" = 80 ]; }; then
+    HOST_HEADER="${HOST}"
+else
+    HOST_HEADER="${HOST}:${PORT}"
+fi
+
+{
+    printf 'proxy_set_header Host %s;\n' "${HOST_HEADER}"
+    if [ "${SCHEME}" = https ]; then
+        printf 'proxy_ssl_server_name on;\n'
+        printf 'proxy_ssl_name %s;\n' "${HOST}"
+    fi
+} > /etc/nginx/upstream.conf
+
+# 8099 is the Supervisor default for ingress_port, which is why config.json does
+# not set it. Hardcoded rather than read from the Supervisor API so the addon
+# does not need the hassio_api role.
+export INGRESS_PORT=8099
+
+bashio::log.info "Starting Frigate Yard Stats Proxy..."
+bashio::log.info "Upstream: ${UPSTREAM}"
+
+envsubst '${UPSTREAM} ${INGRESS_PORT}' \
+    < /etc/nginx/templates/nginx.conf.template \
+    > /etc/nginx/nginx.conf
+
+# Optional: drop the API key straight into the page so nobody has to type it.
+# The report UI keeps the key in an "api_key" cookie and sends it as X-API-Key on
+# every call, so seeding that cookie is all it takes. Attributes match the ones
+# the app itself writes, so the two cannot disagree.
+: > /etc/nginx/inject.conf
+if bashio::config.has_value 'api_key'; then
+    API_KEY=$(bashio::config 'api_key' | tr -d '[:space:]')
+    bashio::log.info "API key configured, seeding it into the report UI"
+    {
+        # sub_filter cannot match a compressed body.
+        printf 'proxy_set_header Accept-Encoding "";\n'
+        printf "sub_filter '</head>' '<script>(function(){try{document.cookie=\"api_key=%s; max-age=31536000; path=/; samesite=lax\";}catch(e){}})();</script></head>';\n" "${API_KEY}"
+    } > /etc/nginx/inject.conf
+else
+    bashio::log.info "No api_key set; you will enter it once in the UI and it is remembered"
+fi
+
+mkdir -p /var/log/nginx /var/lib/nginx/tmp
+chown nginx:nginx /var/lib/nginx/tmp
+
+if ! nginx -t; then
+    bashio::log.error "Nginx rejected the generated configuration (shown above)."
+    bashio::log.error "Check server_host and server_port; server_host may be a host or a full URL."
+    sleep 10
+    bashio::exit.nok
+fi
+
+bashio::log.info "Starting Nginx..."
+exec 2>&1
+exec nginx -g 'daemon off;'

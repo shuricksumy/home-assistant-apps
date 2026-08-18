@@ -1,0 +1,40 @@
+worker_processes 1;
+pid /var/run/nginx.pid;
+error_log /proc/1/fd/2 info;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    # No mime.types or default_type: nothing is served from disk here, every
+    # response is proxied and carries the upstream's own Content-Type.
+    access_log /proc/1/fd/1 combined;
+
+    server_tokens off;
+
+    # Thumbnails and clips are served straight through; never buffer or cap them,
+    # and let range requests work so video seeking behaves.
+    client_max_body_size 0;
+    proxy_buffering off;
+    proxy_request_buffering off;
+
+    server {
+        listen ${INGRESS_PORT} default_server;
+
+        # The report UI lives at /ui/, but Ingress opens the add-on at its root.
+        # Redirect rather than proxying root to /ui/: the page's assets are
+        # relative, so the browser has to actually be at /ui/ for them to resolve
+        # to /ui/... upstream. The target is relative, so it lands inside the
+        # Ingress path without this add-on needing to know what that path is.
+        location = / {
+            return 302 ui/;
+        }
+
+        location / {
+            proxy_pass ${UPSTREAM};
+            include /etc/nginx/proxy_common.conf;
+            include /etc/nginx/inject.conf;
+        }
+    }
+}

@@ -1,0 +1,7 @@
+---
+# ghcr.io/hassio-addons/base:20.0.2 is a multi-arch OCI index that publishes
+# linux/amd64 and linux/arm64 only, which is why config.json declares just
+# aarch64 and amd64.
+build_from:
+  aarch64: ghcr.io/hassio-addons/base:20.0.2
+  amd64: ghcr.io/hassio-addons/base:20.0.2
