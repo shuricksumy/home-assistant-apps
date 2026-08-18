@@ -8,10 +8,12 @@ RUN apk add --no-cache \
 
 COPY rootfs /
 
+# Required, not redundant: these are tracked without the executable bit, and s6
+# silently ignores a service script it cannot execute.
 RUN chmod a+x /etc/services.d/nginx/run \
     && chmod a+x /etc/services.d/nginx/finish
 
 LABEL \
     io.hass.name="Music Assistant Proxy" \
-    io.hass.description="Proxy voor Music Assistant met Web Interface" \
+    io.hass.description="Ingress proxy to a Music Assistant server running elsewhere" \
     io.hass.type="addon"

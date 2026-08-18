@@ -17,11 +17,14 @@ envsubst '${SERVER_HOST} ${SERVER_PORT} ${INGRESS_PORT}' \
     < /etc/nginx/templates/nginx.conf.template \
     > /etc/nginx/nginx.conf
 
-# Optional auto-login. MA binds a saved token to a "connection identity" derived
-# from the URL it was reached on; behind ingress that binding does not survive, so
-# the UI asks to log in on every visit. Re-seed both values on every page load,
-# computing the identity exactly as the frontend's createLocalConnectionIdentity
-# does, so it stays correct even if the ingress path token changes.
+# Optional auto-login: drop a token straight into the page so nobody has to type
+# credentials. Without this you simply sign in once and the session is kept.
+#
+# Two keys are written. "ma_access_token" is the one this MA reads on startup.
+# "ma_access_token_connection" does not exist in this version and is inert here,
+# but newer builds bind a saved token to a connection identity and refuse to
+# restore it without a match, so it is written for them -- computed exactly as
+# their createLocalConnectionIdentity does, from whatever URL served the page.
 : > /etc/nginx/inject.conf
 if bashio::config.has_value 'ma_token'; then
     # Tokens are usually pasted, so strip any stray whitespace or newline. A

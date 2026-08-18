@@ -7,20 +7,22 @@ events {
 }
 
 http {
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
+    # No mime.types or default_type: nothing is served from disk here. Every
+    # response is proxied and carries the upstream's own Content-Type, and the
+    # one locally generated response sets its type itself. sendfile likewise has
+    # nothing to act on.
     access_log /proc/1/fd/1 combined;
 
-    sendfile on;
-    tcp_nopush on;
     server_tokens off;
 
     # Rewriting a response means asking the upstream not to compress it, so
     # compress it again here rather than shipping the bundle uncompressed.
+    # Only the types actually rewritten need this; everything else reaches the
+    # browser still compressed by the upstream.
     gzip on;
     gzip_proxied any;
     gzip_min_length 1024;
-    gzip_types text/html text/javascript application/javascript application/json;
+    gzip_types text/html text/javascript application/javascript;
 
     # Music Assistant streams audio and artwork; never buffer or cap it.
     client_max_body_size 0;
@@ -71,12 +73,14 @@ http {
         # Fixed upstream by frontend #2216 ("Fix login behind Home Assistant
         # ingress"), which is not in any released server build yet; drop this
         # once a release carries it.
-        # Served under a renamed prefix, rewritten into the page, so a browser
-        # holding the unpatched bundle cannot revalidate its way back to it --
-        # MA sends no Cache-Control on assets, only a validator. Renaming the
-        # directory rather than adding a query keeps every module in one URL
-        # namespace: relative imports inside the bundle resolve back into this
-        # same prefix, so nothing is loaded twice under two identities.
+        #
+        # The prefix is renamed rather than passed through, and the page rewritten
+        # to match, so a browser holding the unpatched bundle cannot revalidate
+        # its way back to it -- MA sends no Cache-Control on assets, only a
+        # validator. Renaming the directory rather than adding a query keeps every
+        # module in one URL namespace: relative imports inside the bundle resolve
+        # back into this same prefix, so nothing is loaded twice under two
+        # identities. Bump the suffix here and in html_entry.conf together.
         location /assets-mp1/ {
             proxy_pass http://${SERVER_HOST}:${SERVER_PORT}/assets/;
             include /etc/nginx/proxy_common.conf;
