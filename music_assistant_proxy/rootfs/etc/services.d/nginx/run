@@ -46,8 +46,10 @@ fi
         printf 'proxy_ssl_name %s;\n' "${HOST}"
     fi
 } > /etc/nginx/upstream.conf
-# Must match "ingress_port" in config.json. Hardcoded rather than read from the
-# Supervisor API so the addon does not need the hassio_api role.
+# 8099 is the Supervisor default for ingress_port, which is why config.json no
+# longer sets it. Hardcoded rather than read from the Supervisor API so the addon
+# does not need the hassio_api role; if that default ever changes, set
+# ingress_port explicitly in config.json and match it here.
 export INGRESS_PORT=8099
 
 bashio::log.info "Starting Music Assistant Proxy..."

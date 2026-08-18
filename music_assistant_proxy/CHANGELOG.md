@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.1
+
+- Removed config keys that only repeated Supervisor defaults, as flagged by the add-on
+  linter. Behaviour is unchanged, including the panel staying admin-only.
+- Dropped the `advanced` flag, so the add-on now appears without Advanced Mode enabled.
+
 ## 1.9.0
 
 - `server_host` now accepts a full URL, not just a host. `https://` upstreams are

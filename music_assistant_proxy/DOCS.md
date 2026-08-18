@@ -99,9 +99,10 @@ Could not reach Music Assistant at <host>:<port> to verify the token.
 > past removing that person's Home Assistant account. Signing in individually keeps each
 > person's access tied to their own Music Assistant account instead.
 >
-> The panel is restricted to administrators (`"panel_admin": true`). If you want everyone
-> in the household to reach it, set that to `false` — and prefer individual sign-in over a
-> shared token when you do, since that widens who could extract it.
+> The panel is restricted to administrators, which is the Supervisor default. To let
+> everyone in the household reach it, add `"panel_admin": false` to the add-on config —
+> and prefer individual sign-in over a shared token when you do, since that widens who
+> could extract it.
 
 ### One login per address
 
