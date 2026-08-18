@@ -19,7 +19,7 @@ enough — no HTML rewriting required.
 | ------------- | ------------------------------------------------------------------ |
 | `server_host` | IP or hostname of the Music Assistant server (e.g. `192.168.1.10`) |
 | `server_port` | Port of the Music Assistant web interface (default `8095`)          |
-| `ma_token`    | Optional bearer token, see the note on authentication below         |
+| `ma_token`    | Optional long-lived token for auto-login, see below                 |
 
 A hostname is resolved once when nginx starts. If your server's IP changes, restart the
 add-on.
@@ -37,10 +37,27 @@ session is stored in the browser against your Home Assistant origin and persists
 is a one-time step. Note that this session is separate from any session you have when
 visiting the server directly on its own address.
 
-`ma_token` sets an `Authorization: Bearer` header on proxied HTTP requests. The web UI
-authenticates in-band over the websocket, so this does **not** skip the login screen —
-it only covers direct HTTP API calls made through the proxy. Leave it empty unless you
-need that.
+### Being asked to log in on every visit
+
+Music Assistant binds a saved token to a *connection identity* built from the URL you
+reached it on (`local:{protocol}//{host}{path}`). It only restores the token when that
+binding matches. Both of the frontend's login paths call `setToken()` without an
+identity, which clears the binding, and the re-bind that follows does not survive behind
+a proxied ingress — so the token is in your browser but never accepted, and you get the
+login screen every time.
+
+Setting `ma_token` fixes this. The proxy injects a small script into the page that writes
+the token and a freshly computed matching identity into local storage on every load. The
+identity is computed the same way the frontend does, so it stays correct even if the
+ingress path changes.
+
+To get a token: in Music Assistant, open your profile settings and create a **long-lived
+token**, then paste it into `ma_token` and restart the add-on.
+
+> **Note on access.** A seeded token logs everyone who opens the panel in as that user.
+> Anyone reaching it already has a Home Assistant login, but if you share Home Assistant
+> with people who should not have full Music Assistant control, either leave `ma_token`
+> empty or set `"panel_admin": true` in the add-on config so only administrators see it.
 
 ## Support
 

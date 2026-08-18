@@ -49,7 +49,8 @@ http {
             proxy_send_timeout 3600s;
             proxy_read_timeout 3600s;
 
-            include /etc/nginx/auth.conf;
+            # Optional auto-login seed (generated at boot from the ma_token option).
+            include /etc/nginx/inject.conf;
         }
     }
 }

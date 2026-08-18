@@ -17,14 +17,26 @@ envsubst '${SERVER_HOST} ${SERVER_PORT} ${INGRESS_PORT}' \
     < /etc/nginx/templates/nginx.conf.template \
     > /etc/nginx/nginx.conf
 
-# Optional bearer token. This authenticates plain HTTP requests only; the web UI
-# authenticates in-band over the websocket, so it does not replace logging in.
+# Optional auto-login. MA binds a saved token to a "connection identity" derived
+# from the URL it was reached on; behind ingress that binding does not survive, so
+# the UI asks to log in on every visit. Re-seed both values on every page load,
+# computing the identity exactly as the frontend's createLocalConnectionIdentity
+# does, so it stays correct even if the ingress path token changes.
 if bashio::config.has_value 'ma_token'; then
-    bashio::log.info "Bearer token configured, injecting Authorization header"
-    printf 'proxy_set_header Authorization "Bearer %s";\n' \
-        "$(bashio::config 'ma_token')" > /etc/nginx/auth.conf
+    bashio::log.info "Access token configured, seeding the web UI session"
+    {
+        # sub_filter cannot match a compressed body.
+        printf 'proxy_set_header Accept-Encoding "";\n'
+        printf 'sub_filter_once on;\n'
+        printf "sub_filter '</head>' '<script>(function(){try{var t=\"%s\";" \
+            "$(bashio::config 'ma_token')"
+        printf 'var p=location.pathname;while(p.length&&p.charAt(p.length-1)==="/"){p=p.slice(0,-1);}'
+        printf 'localStorage.setItem("ma_access_token",t);'
+        printf 'localStorage.setItem("ma_access_token_connection","local:"+location.protocol+"//"+location.host+p);'
+        printf "}catch(e){}})();</script></head>';\n"
+    } > /etc/nginx/inject.conf
 else
-    : > /etc/nginx/auth.conf
+    : > /etc/nginx/inject.conf
 fi
 
 # Create required directories

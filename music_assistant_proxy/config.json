@@ -1,6 +1,6 @@
 {
   "name": "Music Assistant Proxy",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "slug": "music_assistant_proxy",
   "description": "Ingress proxy to a Music Assistant server running elsewhere (Docker / other machine)",
   "url": "https://github.com/shuricksumy/home-assistant-apps",
