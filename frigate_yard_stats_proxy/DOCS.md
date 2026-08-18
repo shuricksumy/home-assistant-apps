@@ -6,10 +6,17 @@ service running somewhere else into the Home Assistant sidebar via Ingress.
 
 ## Requirements
 
-The report UI must resolve its API calls relative to the page it is served from. Older
-builds call `/events` and friends as absolute paths, which resolve against Home
-Assistant instead of the service and return 404 behind Ingress. If the panel loads
-styled but stays empty, that is the symptom — update the service.
+The Yard Stats service must include the sub-path support added in *"Make the web UI
+work behind a reverse-proxy sub-path"*. Two things depend on it:
+
+- The UI derives its API root from the page's own location. Older builds call `/events`
+  and friends as absolute paths, which resolve against Home Assistant instead of the
+  service and return 404. Symptom: the panel loads styled but stays empty.
+- `/ui` redirects to `/ui/` with a **relative** `Location`. Older builds emitted an
+  absolute one pointing at the service's own internal address, which is unreachable
+  through this proxy. Symptom: opening the panel lands on a dead address.
+
+This add-on deliberately rewrites nothing, so both fixes belong in the service.
 
 ## Configuration
 

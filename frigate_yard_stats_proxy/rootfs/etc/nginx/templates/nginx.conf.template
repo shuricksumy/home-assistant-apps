@@ -22,6 +22,12 @@ http {
     server {
         listen ${INGRESS_PORT} default_server;
 
+        # Never let nginx turn a redirect into an absolute URL built from its own
+        # address: behind Ingress that would send the browser to this container
+        # instead of back through the proxy. The upstream had exactly this bug in
+        # its /ui redirect, and nothing here rewrites response bodies or headers.
+        absolute_redirect off;
+
         # The report UI lives at /ui/, but Ingress opens the add-on at its root.
         # Redirect rather than proxying root to /ui/: the page's assets are
         # relative, so the browser has to actually be at /ui/ for them to resolve
