@@ -22,7 +22,7 @@ http {
     gzip on;
     gzip_proxied any;
     gzip_min_length 1024;
-    gzip_types text/html text/javascript application/javascript;
+    gzip_types text/javascript application/javascript;
 
     # Music Assistant streams audio and artwork; never buffer or cap it.
     client_max_body_size 0;
@@ -82,7 +82,7 @@ http {
         # back into this same prefix, so nothing is loaded twice under two
         # identities. Bump the suffix here and in html_entry.conf together.
         location /assets-mp1/ {
-            proxy_pass http://${SERVER_HOST}:${SERVER_PORT}/assets/;
+            proxy_pass ${UPSTREAM}/assets/;
             include /etc/nginx/proxy_common.conf;
 
             # sub_filter cannot match a compressed body.
@@ -97,19 +97,19 @@ http {
         # injected into. MA serves it from "/" but a direct /index.html request
         # must get the same treatment.
         location = / {
-            proxy_pass http://${SERVER_HOST}:${SERVER_PORT};
+            proxy_pass ${UPSTREAM};
             include /etc/nginx/proxy_common.conf;
             include /etc/nginx/html_entry.conf;
         }
 
         location = /index.html {
-            proxy_pass http://${SERVER_HOST}:${SERVER_PORT};
+            proxy_pass ${UPSTREAM};
             include /etc/nginx/proxy_common.conf;
             include /etc/nginx/html_entry.conf;
         }
 
         location / {
-            proxy_pass http://${SERVER_HOST}:${SERVER_PORT};
+            proxy_pass ${UPSTREAM};
             include /etc/nginx/proxy_common.conf;
         }
     }

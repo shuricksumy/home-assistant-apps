@@ -8,12 +8,19 @@ Assistant sidebar via Ingress.
 
 | Option        | Description                                                          |
 | ------------- | -------------------------------------------------------------------- |
-| `server_host` | IP or hostname of the Music Assistant server (e.g. `192.168.1.11`) |
-| `server_port` | Port of the Music Assistant web interface (default `8095`)           |
+| `server_host` | Address of the Music Assistant server: an IP, a hostname, or a full URL such as `https://ma.example.com` |
+| `server_port` | Port of the Music Assistant web interface (default `8095`, or `443` for an HTTPS URL) |
 | `ma_token`    | Optional long-lived token for auto-login, see below                  |
 
 A hostname is resolved once when nginx starts. If your server's IP changes, restart the
 add-on.
+
+Give `server_host` an `https://` URL and the add-on connects over TLS, sending the right
+Host header and SNI so a name-based reverse proxy routes it. That is supported, but it is
+rarely what you want: the add-on already sits on the same network as the server, so going
+out through a public name and back only adds a DNS and reverse proxy dependency to a hop
+that never leaves the house. Prefer the local address, and note that publishing Music
+Assistant over HTTPS for browser sign-in does not require changing this.
 
 If the server has more than one local address, point `server_host` at the same one Music
 Assistant publishes as its base URL (its System settings, visible at

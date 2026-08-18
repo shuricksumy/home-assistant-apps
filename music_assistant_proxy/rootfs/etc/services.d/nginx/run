@@ -1,19 +1,61 @@
 #!/usr/bin/with-contenv bashio
 
-# Get config values
-export SERVER_HOST=$(bashio::config 'server_host')
-export SERVER_PORT=$(bashio::config 'server_port')
+# Get config values. server_host is accepted as a bare host, or as a full URL so
+# that a Music Assistant published through a reverse proxy can be given as-is.
+RAW_HOST=$(bashio::config 'server_host' | tr -d '[:space:]')
+SERVER_PORT=$(bashio::config 'server_port')
+
+SCHEME=http
+case "${RAW_HOST}" in
+    https://*) SCHEME=https; RAW_HOST=${RAW_HOST#https://} ;;
+    http://*)  SCHEME=http;  RAW_HOST=${RAW_HOST#http://} ;;
+esac
+RAW_HOST=${RAW_HOST%%/*}
+
+case "${RAW_HOST}" in
+    \[*\]:*)  HOST=${RAW_HOST%:*};  PORT=${RAW_HOST##*:} ;;   # [::1]:8095
+    \[*\])    HOST=${RAW_HOST};     PORT=${SERVER_PORT}  ;;   # [::1]
+    *:*)      HOST=${RAW_HOST%%:*}; PORT=${RAW_HOST##*:} ;;   # host:8095
+    *)        HOST=${RAW_HOST};     PORT=${SERVER_PORT}  ;;
+esac
+
+if [ -z "${HOST}" ]; then
+    bashio::log.error "server_host is empty. Set it to the address of your Music Assistant server."
+    sleep 10
+    bashio::exit.nok
+fi
+
+export UPSTREAM="${SCHEME}://${HOST}:${PORT}"
+
+# A reverse proxy routes on the Host header, so send the upstream's own name
+# rather than the address the browser used. Default ports are left off, as a
+# vhost match on "name:443" is not something every proxy handles.
+if { [ "${SCHEME}" = https ] && [ "${PORT}" = 443 ]; } \
+    || { [ "${SCHEME}" = http ] && [ "${PORT}" = 80 ]; }; then
+    HOST_HEADER="${HOST}"
+else
+    HOST_HEADER="${HOST}:${PORT}"
+fi
+
+{
+    printf 'proxy_set_header Host %s;\n' "${HOST_HEADER}"
+    if [ "${SCHEME}" = https ]; then
+        # Without SNI a name-based proxy cannot tell which certificate to serve.
+        printf 'proxy_ssl_server_name on;\n'
+        printf 'proxy_ssl_name %s;\n' "${HOST}"
+    fi
+} > /etc/nginx/upstream.conf
 # Must match "ingress_port" in config.json. Hardcoded rather than read from the
 # Supervisor API so the addon does not need the hassio_api role.
 export INGRESS_PORT=8099
 
 bashio::log.info "Starting Music Assistant Proxy..."
-bashio::log.info "Upstream: ${SERVER_HOST}:${SERVER_PORT}"
+bashio::log.info "Upstream: ${UPSTREAM}"
 bashio::log.info "Ingress port: ${INGRESS_PORT}"
 
 # Render the config from the template on every boot, so changing the addon
 # options actually takes effect. Never write back over the template itself.
-envsubst '${SERVER_HOST} ${SERVER_PORT} ${INGRESS_PORT}' \
+envsubst '${UPSTREAM} ${INGRESS_PORT}' \
     < /etc/nginx/templates/nginx.conf.template \
     > /etc/nginx/nginx.conf
 
@@ -33,16 +75,17 @@ if bashio::config.has_value 'ma_token'; then
 
     # Ask Music Assistant whether it actually accepts this token, so a bad one
     # shows up here instead of as a login screen with no explanation.
-    AUTH_CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 \
+    # -k because nginx does not verify the upstream certificate either.
+    AUTH_CODE=$(curl -s -k -o /dev/null -w '%{http_code}' -m 10 \
         -H "Authorization: Bearer ${MA_TOKEN}" \
-        "http://${SERVER_HOST}:${SERVER_PORT}/auth/me" || true)
+        "${UPSTREAM}/auth/me" || true)
 
     case "${AUTH_CODE}" in
         200)
             bashio::log.info "Token accepted by Music Assistant, seeding the web UI session"
             ;;
         000|"")
-            bashio::log.warning "Could not reach Music Assistant at ${SERVER_HOST}:${SERVER_PORT} to verify the token."
+            bashio::log.warning "Could not reach Music Assistant at ${UPSTREAM} to verify the token."
             bashio::log.warning "Seeding it anyway; check server_host and server_port if the panel stays empty."
             ;;
         *)
@@ -70,6 +113,9 @@ chown nginx:nginx /var/lib/nginx/tmp
 # Fail loudly on a bad config rather than looping on a restart with no reason.
 if ! nginx -t; then
     bashio::log.error "Nginx rejected the generated configuration (shown above)."
+    bashio::log.error "Check server_host and server_port; server_host may be a host or a full URL."
+    # Slow the s6 restart loop so the real error stays readable in the log.
+    sleep 10
     bashio::exit.nok
 fi
 
