@@ -1,4 +1,5 @@
 #!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
 
 # Get config values. server_host is accepted as a bare host, or as a full URL so
 # that a Music Assistant published through a reverse proxy can be given as-is.

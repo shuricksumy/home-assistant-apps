@@ -1,0 +1,51 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  find:
+    name: Find apps
+    runs-on: ubuntu-latest
+    outputs:
+      addons: ${{ steps.addons.outputs.addons_list }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7.0.1
+
+      - name: Find app directories
+        id: addons
+        uses: home-assistant/actions/helpers/find-addons@master
+
+  lint:
+    name: Lint ${{ matrix.path }}
+    runs-on: ubuntu-latest
+    needs: find
+    strategy:
+      matrix:
+        path: ${{ fromJson(needs.find.outputs.addons) }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7.0.1
+
+      # Validates config.json, build.yaml and the Dockerfile against the
+      # add-on schema. This is the same linter the official example repo runs.
+      - name: Run Home Assistant app linter
+        uses: frenck/action-app-linter@v2.21.1
+        with:
+          path: "./${{ matrix.path }}"
+
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7.0.1
+
+      # The s6 service scripts use a with-contenv shebang that shellcheck does
+      # not recognise, so each carries a "shellcheck shell=bash" directive.
+      - name: Run shellcheck
+        uses: ludeeus/action-shellcheck@2.0.0
