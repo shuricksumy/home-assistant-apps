@@ -37,17 +37,25 @@ http {
 
         # MA's frontend registers a service worker that precaches the app shell,
         # answering navigations from Cache Storage without ever reaching this
-        # proxy -- which would strand both rewrites below. Replace it with a
-        # worker that simply unregisters itself.
+        # proxy -- which would strand the rewrites below. Replace it with one
+        # that registers and claims normally but installs no fetch handler, so
+        # every request goes to the network.
+        #
+        # It must stay registered rather than unregister itself: the app awaits
+        # navigator.serviceWorker.ready with no timeout and then waits for a
+        # controller, both behind the call that opens the API connection. A
+        # worker that removes itself leaves those awaits racing a registration
+        # that is disappearing. It also answers the set-remote-mode handshake,
+        # which otherwise stalls the app for its full two second timeout.
         #
         # It deliberately does not clear Cache Storage: under ingress that origin
         # is shared with Home Assistant's own frontend, so deleting caches would
-        # take HA's PWA cache with it. It also does not navigate its clients,
-        # which would reload into a re-register/unregister loop.
+        # take HA's PWA cache with it. With no fetch handler the stale entries
+        # are simply never consulted.
         location = /sw.js {
             default_type text/javascript;
             add_header Cache-Control "no-store" always;
-            return 200 'self.addEventListener("install",function(){self.skipWaiting();});self.addEventListener("activate",function(e){e.waitUntil(self.registration.unregister());});';
+            return 200 'self.addEventListener("install",function(){self.skipWaiting();});self.addEventListener("activate",function(e){e.waitUntil(self.clients.claim());});self.addEventListener("message",function(e){var d=e.data&&e.data.type;if(d==="set-remote-mode"&&e.source&&e.source.postMessage){e.source.postMessage({type:"remote-mode-ack"});}});';
         }
 
         # Music Assistant decides it is running as a Home Assistant add-on purely
@@ -63,8 +71,14 @@ http {
         # Fixed upstream by frontend #2216 ("Fix login behind Home Assistant
         # ingress"), which is not in any released server build yet; drop this
         # once a release carries it.
-        location /assets/ {
-            proxy_pass http://${SERVER_HOST}:${SERVER_PORT};
+        # Served under a renamed prefix, rewritten into the page, so a browser
+        # holding the unpatched bundle cannot revalidate its way back to it --
+        # MA sends no Cache-Control on assets, only a validator. Renaming the
+        # directory rather than adding a query keeps every module in one URL
+        # namespace: relative imports inside the bundle resolve back into this
+        # same prefix, so nothing is loaded twice under two identities.
+        location /assets-mp1/ {
+            proxy_pass http://${SERVER_HOST}:${SERVER_PORT}/assets/;
             include /etc/nginx/proxy_common.conf;
 
             # sub_filter cannot match a compressed body.
