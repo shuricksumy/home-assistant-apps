@@ -54,6 +54,26 @@ ingress path changes.
 To get a token: in Music Assistant, open your profile settings and create a **long-lived
 token**, then paste it into `ma_token` and restart the add-on.
 
+Two caches sit in front of this and both are handled:
+
+- MA serves the index with `ETag`/`Last-Modified`, so a returning browser gets a
+  `304` with an empty body. There is nothing there to inject into, so the proxy
+  strips the conditional request headers and marks the page `no-store`.
+- MA's frontend registers a **service worker** that precaches the app shell, which
+  would answer navigations from Cache Storage without ever reaching this proxy.
+  While auto-login is on, the proxy replaces `/sw.js` with a worker that
+  unregisters itself, handing navigation back to the network. It does not clear
+  Cache Storage, because under ingress that is shared with Home Assistant's own
+  frontend. Offline support for the panel is lost, which does not apply to an
+  ingress panel anyway; visiting the server directly is unaffected.
+
+### One login per address
+
+Tokens are stored per browser origin. Reaching Home Assistant on more than one
+address — say `http://192.168.1.2:8123` on the LAN and `https://ha.example.com`
+from outside — means a separate login for each. Auto-login covers both, since the
+identity is recomputed from whatever address served the page.
+
 > **Note on access.** A seeded token logs everyone who opens the panel in as that user.
 > Anyone reaching it already has a Home Assistant login, but if you share Home Assistant
 > with people who should not have full Music Assistant control, either leave `ma_token`

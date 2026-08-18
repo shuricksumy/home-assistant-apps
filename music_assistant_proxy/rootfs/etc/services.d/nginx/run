@@ -23,6 +23,7 @@ envsubst '${SERVER_HOST} ${SERVER_PORT} ${INGRESS_PORT}' \
 # computing the identity exactly as the frontend's createLocalConnectionIdentity
 # does, so it stays correct even if the ingress path token changes.
 : > /etc/nginx/inject.conf
+: > /etc/nginx/sw.conf
 if bashio::config.has_value 'ma_token'; then
     # Tokens are usually pasted, so strip any stray whitespace or newline. A
     # trailing space silently invalidates the token and is impossible to see.
@@ -59,6 +60,24 @@ if bashio::config.has_value 'ma_token'; then
         printf 'localStorage.setItem("ma_access_token_connection","local:"+location.protocol+"//"+location.host+p);'
         printf "}catch(e){}})();</script></head>';\n"
     } > /etc/nginx/inject.conf
+
+    # MA's frontend registers a service worker that precaches the app shell, so
+    # navigations are answered from Cache Storage and never reach this proxy --
+    # no injection can survive that. Replace it with one that simply unregisters
+    # itself, which hands navigation back to the network.
+    #
+    # It deliberately does not clear Cache Storage: under ingress this shares an
+    # origin with Home Assistant's own frontend, and deleting caches by name
+    # would take HA's PWA cache with it. Orphaned MA caches are simply unused
+    # once the worker is gone. It also does not navigate its clients, which
+    # would reload into a re-register/unregister loop.
+    {
+        printf 'location = /sw.js {\n'
+        printf '    default_type application/javascript;\n'
+        printf '    add_header Cache-Control "no-store" always;\n'
+        printf "    return 200 'self.addEventListener(\"install\",function(){self.skipWaiting();});self.addEventListener(\"activate\",function(e){e.waitUntil(self.registration.unregister());});';\n"
+        printf '}\n'
+    } > /etc/nginx/sw.conf
 else
     bashio::log.info "No ma_token set; the web UI will ask you to log in on each visit"
 fi
