@@ -22,26 +22,56 @@ envsubst '${SERVER_HOST} ${SERVER_PORT} ${INGRESS_PORT}' \
 # the UI asks to log in on every visit. Re-seed both values on every page load,
 # computing the identity exactly as the frontend's createLocalConnectionIdentity
 # does, so it stays correct even if the ingress path token changes.
+: > /etc/nginx/inject.conf
 if bashio::config.has_value 'ma_token'; then
-    bashio::log.info "Access token configured, seeding the web UI session"
+    # Tokens are usually pasted, so strip any stray whitespace or newline. A
+    # trailing space silently invalidates the token and is impossible to see.
+    MA_TOKEN=$(bashio::config 'ma_token' | tr -d '[:space:]')
+
+    # Ask Music Assistant whether it actually accepts this token, so a bad one
+    # shows up here instead of as a login screen with no explanation.
+    AUTH_CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 \
+        -H "Authorization: Bearer ${MA_TOKEN}" \
+        "http://${SERVER_HOST}:${SERVER_PORT}/auth/me" || true)
+
+    case "${AUTH_CODE}" in
+        200)
+            bashio::log.info "Token accepted by Music Assistant, seeding the web UI session"
+            ;;
+        000|"")
+            bashio::log.warning "Could not reach Music Assistant at ${SERVER_HOST}:${SERVER_PORT} to verify the token."
+            bashio::log.warning "Seeding it anyway; check server_host and server_port if the panel stays empty."
+            ;;
+        *)
+            bashio::log.error "Music Assistant rejected the token (HTTP ${AUTH_CODE})."
+            bashio::log.error "Create a fresh long-lived token in Music Assistant and paste it into ma_token."
+            bashio::log.error "Seeding it anyway, but the web UI will keep asking you to log in."
+            ;;
+    esac
+
     {
         # sub_filter cannot match a compressed body.
         printf 'proxy_set_header Accept-Encoding "";\n'
         printf 'sub_filter_once on;\n'
-        printf "sub_filter '</head>' '<script>(function(){try{var t=\"%s\";" \
-            "$(bashio::config 'ma_token')"
+        printf "sub_filter '</head>' '<script>(function(){try{var t=\"%s\";" "${MA_TOKEN}"
         printf 'var p=location.pathname;while(p.length&&p.charAt(p.length-1)==="/"){p=p.slice(0,-1);}'
         printf 'localStorage.setItem("ma_access_token",t);'
         printf 'localStorage.setItem("ma_access_token_connection","local:"+location.protocol+"//"+location.host+p);'
         printf "}catch(e){}})();</script></head>';\n"
     } > /etc/nginx/inject.conf
 else
-    : > /etc/nginx/inject.conf
+    bashio::log.info "No ma_token set; the web UI will ask you to log in on each visit"
 fi
 
 # Create required directories
 mkdir -p /var/log/nginx /var/lib/nginx/tmp
 chown nginx:nginx /var/lib/nginx/tmp
+
+# Fail loudly on a bad config rather than looping on a restart with no reason.
+if ! nginx -t; then
+    bashio::log.error "Nginx rejected the generated configuration (shown above)."
+    bashio::exit.nok
+fi
 
 bashio::log.info "Starting Nginx..."
 exec 2>&1

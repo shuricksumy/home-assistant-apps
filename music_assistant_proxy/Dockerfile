@@ -3,7 +3,8 @@ FROM ${BUILD_FROM}
 
 RUN apk add --no-cache \
     nginx \
-    gettext
+    gettext \
+    curl
 
 COPY rootfs /
 
