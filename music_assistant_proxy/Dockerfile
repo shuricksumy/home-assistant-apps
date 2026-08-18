@@ -15,5 +15,5 @@ RUN chmod a+x /etc/services.d/nginx/run \
 
 LABEL \
     io.hass.name="Music Assistant Proxy" \
-    io.hass.description="Ingress proxy to a Music Assistant server running elsewhere" \
+    io.hass.description="Music Assistant running on its own hardware, in your Home Assistant sidebar" \
     io.hass.type="addon"

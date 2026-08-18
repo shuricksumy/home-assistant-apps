@@ -2,7 +2,7 @@
   "name": "Frigate Yard Stats Proxy",
   "version": "1.0.1",
   "slug": "frigate_yard_stats_proxy",
-  "description": "Ingress proxy to a Frigate Yard Stats report UI running elsewhere",
+  "description": "Frigate yard activity and vehicle reports, in your Home Assistant sidebar",
   "url": "https://github.com/shuricksumy/home-assistant-apps",
   "arch": [
     "aarch64",

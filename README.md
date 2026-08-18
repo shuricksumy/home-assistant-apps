@@ -20,10 +20,14 @@ store.
 
 ## Add-ons
 
-| Add-on | Description |
-| ------ | ----------- |
-| [Music Assistant Proxy](music_assistant_proxy) | Puts a Music Assistant server running on another machine into the Home Assistant sidebar |
-| [Frigate Yard Stats Proxy](frigate_yard_stats_proxy) | Puts a Frigate Yard Stats report UI running on another machine into the Home Assistant sidebar |
+| | Add-on | What it gives you |
+| :---: | ------ | ----------------- |
+| <img src="music_assistant_proxy/icon.png" width="48"> | **[Music Assistant Proxy](music_assistant_proxy)** | Music Assistant running on its own hardware, in your Home Assistant sidebar |
+| <img src="frigate_yard_stats_proxy/icon.png" width="48"> | **[Frigate Yard Stats Proxy](frigate_yard_stats_proxy)** | Frigate yard activity and vehicle reports, in your Home Assistant sidebar |
+
+Both solve the same problem from opposite ends of the house: a service worth giving
+its own hardware loses its place in the sidebar, because Ingress only serves add-ons.
+These put it back — without exposing the service itself to anything but your network.
 
 ### Music Assistant Proxy
 
