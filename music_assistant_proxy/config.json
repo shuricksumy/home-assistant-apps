@@ -1,6 +1,6 @@
 {
   "name": "Music Assistant Proxy",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "slug": "music_assistant_proxy",
   "description": "Ingress proxy to a Music Assistant server running elsewhere (Docker / other machine)",
   "url": "https://github.com/shuricksumy/home-assistant-apps",
@@ -16,7 +16,7 @@
   "panel_title": "Music Assistant",
   "panel_admin": true,
   "options": {
-    "server_host": "192.168.1.10",
+    "server_host": "192.168.1.11",
     "server_port": 8095,
     "ma_token": ""
   },

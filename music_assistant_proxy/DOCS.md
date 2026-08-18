@@ -8,12 +8,18 @@ Assistant sidebar via Ingress.
 
 | Option        | Description                                                          |
 | ------------- | -------------------------------------------------------------------- |
-| `server_host` | IP or hostname of the Music Assistant server (e.g. `192.168.1.10`) |
+| `server_host` | IP or hostname of the Music Assistant server (e.g. `192.168.1.11`) |
 | `server_port` | Port of the Music Assistant web interface (default `8095`)           |
 | `ma_token`    | Optional long-lived token for auto-login, see below                  |
 
 A hostname is resolved once when nginx starts. If your server's IP changes, restart the
 add-on.
+
+If the server has more than one address, point `server_host` at the same one Music
+Assistant is configured to publish as its own base URL (its System settings, and visible
+at `http://<server>:<port>/info`). Music Assistant builds the Home Assistant login
+redirect from that base URL rather than from the address you reached it on, so if the two
+disagree the sign-in leaves through a different address than everything else.
 
 ## Signing in
 
