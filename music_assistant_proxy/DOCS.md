@@ -54,8 +54,21 @@ addresses, not from the address you are browsing.
 
 So this works when you reach Home Assistant over plain HTTP on the LAN. Over an HTTPS
 address it is blocked as mixed content, because the redirect targets an HTTP URL from an
-HTTPS page — unless Music Assistant itself is reachable over HTTPS. A Music Assistant
-username and password works on both.
+HTTPS page. A Music Assistant username and password works on both.
+
+To make it work over HTTPS too, put Music Assistant behind your reverse proxy and set its
+`base_url` to that HTTPS address, and its Home Assistant URL to the HTTPS one you browse.
+Both hops then match and Home Assistant accepts the redirect.
+
+This does not push audio or artwork out through the public name. Music Assistant serves
+players from a separate streams address with its own publish IP, and deliberately rewrites
+artwork URLs onto it because "players may not be able to reach the webserver". Speakers
+keep talking to it over the local network.
+
+Keep the add-on's `server_host` on the local address either way. One thing to check: after
+the callback Music Assistant makes a server-to-server call to the Home Assistant URL, so it
+must be able to reach that name from inside the network. If it cannot, the browser half of
+the sign-in succeeds and the last step fails.
 
 ### Auto-login
 
