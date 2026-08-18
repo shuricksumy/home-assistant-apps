@@ -15,6 +15,13 @@ http {
     tcp_nopush on;
     server_tokens off;
 
+    # Rewriting a response means asking the upstream not to compress it, so
+    # compress it again here rather than shipping the bundle uncompressed.
+    gzip on;
+    gzip_proxied any;
+    gzip_min_length 1024;
+    gzip_types text/html text/javascript application/javascript application/json;
+
     # Music Assistant streams audio and artwork; never buffer or cap it.
     client_max_body_size 0;
     proxy_buffering off;
@@ -28,8 +35,45 @@ http {
     server {
         listen ${INGRESS_PORT} default_server;
 
-        # Service worker handling. Written at boot; empty unless auto-login is on.
-        include /etc/nginx/sw.conf;
+        # MA's frontend registers a service worker that precaches the app shell,
+        # answering navigations from Cache Storage without ever reaching this
+        # proxy -- which would strand both rewrites below. Replace it with a
+        # worker that simply unregisters itself.
+        #
+        # It deliberately does not clear Cache Storage: under ingress that origin
+        # is shared with Home Assistant's own frontend, so deleting caches would
+        # take HA's PWA cache with it. It also does not navigate its clients,
+        # which would reload into a re-register/unregister loop.
+        location = /sw.js {
+            default_type text/javascript;
+            add_header Cache-Control "no-store" always;
+            return 200 'self.addEventListener("install",function(){self.skipWaiting();});self.addEventListener("activate",function(e){e.waitUntil(self.registration.unregister());});';
+        }
+
+        # Music Assistant decides it is running as a Home Assistant add-on purely
+        # from the URL containing /hassio_ingress/. It then authenticates through
+        # ingress headers and never calls authenticateWithToken, so the stored
+        # token is unreachable. A server reached over this proxy cannot satisfy
+        # that check -- MA verifies it at socket level, on an ingress port a
+        # remote server does not even bind -- so the UI dead-ends on "Failed to
+        # authenticate via Home Assistant Ingress" and deliberately never offers
+        # the login form.
+        #
+        # Neutralising the check puts the normal token/login path back in reach.
+        # Fixed upstream by frontend #2216 ("Fix login behind Home Assistant
+        # ingress"), which is not in any released server build yet; drop this
+        # once a release carries it.
+        location /assets/ {
+            proxy_pass http://${SERVER_HOST}:${SERVER_PORT};
+            include /etc/nginx/proxy_common.conf;
+
+            # sub_filter cannot match a compressed body.
+            proxy_set_header Accept-Encoding "";
+
+            sub_filter_types text/javascript application/javascript;
+            sub_filter_once off;
+            sub_filter 'window.location.pathname.includes("/hassio_ingress/")' 'false';
+        }
 
         # The SPA entrypoint, and the only response the auto-login script is
         # injected into. MA serves it from "/" but a direct /index.html request

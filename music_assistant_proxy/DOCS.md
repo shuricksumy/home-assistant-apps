@@ -37,6 +37,23 @@ session is stored in the browser against your Home Assistant origin and persists
 is a one-time step. Note that this session is separate from any session you have when
 visiting the server directly on its own address.
 
+### "Failed to authenticate via Home Assistant Ingress"
+
+Music Assistant decides it is running as a Home Assistant add-on purely from the
+URL containing `/hassio_ingress/`. Having decided that, it authenticates through
+ingress headers and never uses a stored token, and it deliberately never falls
+back to the login form. A server reached over this proxy cannot satisfy that
+check — MA verifies it at socket level, on an ingress port a remote server does
+not even bind — so the panel dead-ends on that error.
+
+The proxy neutralises the check as the bundle is served, which puts the normal
+login and token path back in reach. This is fixed upstream by frontend #2216,
+"Fix login behind Home Assistant ingress", which is not in any released server
+build yet; the rewrite can be dropped once a release carries it.
+
+One visible side effect: MA no longer treats the panel as an ingress session, so
+the small Home Assistant back button inside the panel is gone. Use the sidebar.
+
 ### Being asked to log in on every visit
 
 Music Assistant binds a saved token to a *connection identity* built from the URL you
