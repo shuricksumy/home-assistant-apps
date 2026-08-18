@@ -22,8 +22,32 @@ When MA runs as a real add-on it trusts `X-Remote-User-*` headers, but only on a
 bound to the internal Docker bridge (`172.30.32.x:8094`), verified at socket level rather
 than by header. A remote server never binds that port, so that path is closed by design.
 
-So: open the panel and sign in once with your Music Assistant username and password. The
-session is kept, so it is a one-time step.
+So: open the panel and sign in once. If Music Assistant has its Home Assistant login
+provider enabled you can use your existing Home Assistant account rather than a separate
+Music Assistant password (see the caveat below); otherwise use a Music Assistant username
+and password.
+
+The session is then kept, so it is a one-time step. It lives in the browser's local
+storage — no cookies are involved — which means:
+
+- **Per browser.** Phone, laptop and desktop each sign in once. Nothing syncs between them.
+- **Per address.** Reaching Home Assistant on more than one address means one sign-in each,
+  because storage is scoped to the origin.
+- **Independent of Home Assistant.** Signing out of Home Assistant does not clear it.
+
+It lasts 30 days and renews on each use, with a hard 90 day cap, so expect to sign in
+again about quarterly.
+
+### Signing in with your Home Assistant account
+
+Music Assistant redirects to Home Assistant to authorise, then back again. Both hops have
+to stay on the same scheme, and Music Assistant builds those URLs from its own configured
+addresses, not from the address you are browsing.
+
+So this works when you reach Home Assistant over plain HTTP on the LAN. Over an HTTPS
+address it is blocked as mixed content, because the redirect targets an HTTP URL from an
+HTTPS page — unless Music Assistant itself is reachable over HTTPS. A Music Assistant
+username and password works on both.
 
 ### Auto-login
 
@@ -40,10 +64,16 @@ Music Assistant rejected the token (HTTP 401). Create a fresh long-lived token..
 Could not reach Music Assistant at <host>:<port> to verify the token.
 ```
 
-> **Note on access.** A seeded token signs in everyone who opens the panel as that user.
-> Anyone reaching it already has a Home Assistant login, but if you share Home Assistant
-> with people who should not have full Music Assistant control, either leave `ma_token`
-> empty or set `"panel_admin": true` in the add-on config so only administrators see it.
+> **Note on access.** Leaving `ma_token` empty is the safer default, and is why it ships
+> empty. A seeded token is not just an auto-login: it is written into the page, so anyone
+> who can open the panel can read it out of the page source and then use it directly
+> against the Music Assistant server — outside Home Assistant entirely, past its login and
+> past removing that person's Home Assistant account. Signing in individually keeps each
+> person's access tied to their own Music Assistant account instead.
+>
+> The panel is restricted to administrators (`"panel_admin": true`). If you want everyone
+> in the household to reach it, set that to `false` — and prefer individual sign-in over a
+> shared token when you do, since that widens who could extract it.
 
 ### One login per address
 
