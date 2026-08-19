@@ -1,0 +1,108 @@
+#!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
+
+# server_host accepts a bare host, a host:port, or a full URL, so a panel already
+# published through a reverse proxy can be pasted in as-is.
+RAW_HOST=$(bashio::config 'server_host' | tr -d '[:space:]')
+SERVER_PORT=$(bashio::config 'server_port')
+
+SCHEME=http
+case "${RAW_HOST}" in
+    https://*) SCHEME=https; RAW_HOST=${RAW_HOST#https://} ;;
+    http://*)  SCHEME=http;  RAW_HOST=${RAW_HOST#http://} ;;
+esac
+RAW_HOST=${RAW_HOST%%/*}
+
+case "${RAW_HOST}" in
+    \[*\]:*)  HOST=${RAW_HOST%:*};  PORT=${RAW_HOST##*:} ;;   # [::1]:8088
+    \[*\])    HOST=${RAW_HOST};     PORT=${SERVER_PORT}  ;;   # [::1]
+    *:*)      HOST=${RAW_HOST%%:*}; PORT=${RAW_HOST##*:} ;;   # host:8088
+    *)        HOST=${RAW_HOST};     PORT=${SERVER_PORT}  ;;
+esac
+
+if [ -z "${HOST}" ]; then
+    bashio::log.error "server_host is empty. Set it to the address of the machine running bluetooth-web-snapclient."
+    sleep 10
+    bashio::exit.nok
+fi
+
+export UPSTREAM="${SCHEME}://${HOST}:${PORT}"
+
+# A reverse proxy routes on the Host header, so send the upstream's own name
+# rather than the address the browser used. Default ports are left off, since a
+# vhost match on "name:443" is not something every proxy handles.
+if { [ "${SCHEME}" = https ] && [ "${PORT}" = 443 ]; } \
+    || { [ "${SCHEME}" = http ] && [ "${PORT}" = 80 ]; }; then
+    HOST_HEADER="${HOST}"
+else
+    HOST_HEADER="${HOST}:${PORT}"
+fi
+
+{
+    printf 'proxy_set_header Host %s;\n' "${HOST_HEADER}"
+    if [ "${SCHEME}" = https ]; then
+        # Without SNI a name-based proxy cannot tell which certificate to serve.
+        printf 'proxy_ssl_server_name on;\n'
+        printf 'proxy_ssl_name %s;\n' "${HOST}"
+    fi
+
+    # The panel's own ADMIN_PASSWORD, sent upstream on every request. Ingress has
+    # already authenticated the user against Home Assistant by the time anything
+    # reaches here, so asking them for a second password in the sidebar would be
+    # noise. Leave `password` empty if the panel runs without auth.
+    if bashio::config.has_value 'password'; then
+        USERNAME=$(bashio::config 'username')
+        if [ -z "${USERNAME}" ] || [ "${USERNAME}" = "null" ]; then
+            USERNAME="admin"
+        fi
+        CREDS=$(printf '%s:%s' "${USERNAME}" "$(bashio::config 'password')" | base64 -w 0)
+        printf 'proxy_set_header Authorization "Basic %s";\n' "${CREDS}"
+    fi
+} > /etc/nginx/upstream.conf
+
+# 8099 is the Supervisor default for ingress_port, which is why config.json does
+# not set it. Hardcoded rather than read from the Supervisor API so the add-on
+# does not need the hassio_api role; if that default ever changes, set
+# ingress_port explicitly in config.json and match it here.
+export INGRESS_PORT=8099
+
+bashio::log.info "Starting Bluetooth Web Snapclient Proxy..."
+bashio::log.info "Upstream: ${UPSTREAM}"
+if bashio::config.has_value 'password'; then
+    bashio::log.info "Sending Basic auth upstream as '$(bashio::config 'username')'"
+else
+    bashio::log.info "No password set; assuming the panel runs without auth"
+fi
+
+# Render the config from the template on every boot so changing the add-on
+# options actually takes effect. Never write back over the template itself.
+envsubst '${UPSTREAM} ${INGRESS_PORT}' \
+    < /etc/nginx/templates/nginx.conf.template \
+    > /etc/nginx/nginx.conf
+
+# Tell the user now if the panel is unreachable, rather than leaving them with a
+# blank sidebar page and no explanation.
+CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "${UPSTREAM}/api/config" || true)
+case "${CODE}" in
+    200) bashio::log.info "Panel reachable at ${UPSTREAM}" ;;
+    401) bashio::log.warning "Panel reachable but rejected our credentials (HTTP 401)." ;
+         bashio::log.warning "Check the username and password options against ADMIN_USER/ADMIN_PASSWORD." ;;
+    000|"") bashio::log.warning "Could not reach ${UPSTREAM}. Check server_host and server_port," ;
+            bashio::log.warning "and that the panel's port is published on that machine." ;;
+    *) bashio::log.warning "Panel answered HTTP ${CODE} at ${UPSTREAM}/api/config" ;;
+esac
+
+mkdir -p /var/log/nginx /var/lib/nginx/tmp
+chown nginx:nginx /var/lib/nginx/tmp
+
+# Fail loudly on a bad config rather than looping on a restart with no reason.
+if ! nginx -t; then
+    bashio::log.error "Nginx rejected the generated configuration (shown above)."
+    bashio::log.error "Check server_host and server_port; server_host may be a host or a full URL."
+    sleep 10
+    bashio::exit.nok
+fi
+
+bashio::log.info "Starting Nginx..."
+exec 2>&1
+exec nginx -g 'daemon off;'
