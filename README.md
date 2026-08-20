@@ -1,5 +1,7 @@
 # Home Assistant Apps
 
+> **Part of the [Home Audio Stack](https://github.com/shuricksumy/home-audio-stack)** — Music Assistant → Snapcast → PipeWire, into USB DACs, Bluetooth speakers and LED strips. That page maps how these projects fit together.
+
 [![Lint](https://github.com/shuricksumy/home-assistant-apps/actions/workflows/lint.yaml/badge.svg)](https://github.com/shuricksumy/home-assistant-apps/actions/workflows/lint.yaml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
