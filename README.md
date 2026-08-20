@@ -5,7 +5,17 @@
 [![Lint](https://github.com/shuricksumy/home-assistant-apps/actions/workflows/lint.yaml/badge.svg)](https://github.com/shuricksumy/home-assistant-apps/actions/workflows/lint.yaml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A small Home Assistant add-on repository.
+Home Assistant's Ingress only serves **add-ons**. So anything worth giving its
+own hardware — a music server on a box wired to your DAC, a camera analyser on a
+machine with a GPU — loses its place in the sidebar the moment you move it off
+the Home Assistant host.
+
+These add-ons put it back. Each one is a small proxy: the service keeps running
+where it belongs, and Home Assistant shows it with its own login in front,
+working from outside over Nabu Casa like anything else. Nothing is exposed to the
+internet.
+
+**Setting up the audio side too?** The [Home Audio Stack](https://github.com/shuricksumy/home-audio-stack) has a [complete compose file](https://github.com/shuricksumy/home-audio-stack/tree/main/examples) for the services these add-ons surface.
 
 ## Adding this repository
 
