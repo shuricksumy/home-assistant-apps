@@ -14,11 +14,11 @@ jobs:
       addons: ${{ steps.addons.outputs.addons_list }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Find app directories
         id: addons
-        uses: home-assistant/actions/helpers/find-addons@master
+        uses: home-assistant/actions/helpers/find-addons@cd6f3635a740c84d8a14f6121a90068b8ece6bf6 # master
 
   lint:
     name: Lint ${{ matrix.path }}
@@ -29,12 +29,12 @@ jobs:
         path: ${{ fromJson(needs.find.outputs.addons) }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Validates config.json, build.yaml and the Dockerfile against the
       # add-on schema. This is the same linter the official example repo runs.
       - name: Run Home Assistant app linter
-        uses: frenck/action-app-linter@v2.21.1
+        uses: frenck/action-app-linter@b9cfd1bc62ba60d2c4fc96317b5f7ada5923f4a7 # v2.21.1
         with:
           path: "./${{ matrix.path }}"
 
@@ -43,9 +43,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The s6 service scripts use a with-contenv shebang that shellcheck does
       # not recognise, so each carries a "shellcheck shell=bash" directive.
       - name: Run shellcheck
-        uses: ludeeus/action-shellcheck@2.0.0
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
