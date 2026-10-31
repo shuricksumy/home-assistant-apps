@@ -49,3 +49,16 @@ jobs:
       # not recognise, so each carries a "shellcheck shell=bash" directive.
       - name: Run shellcheck
         uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
+
+  # The one check the main-branch ruleset requires: the lint matrix is built
+  # from the app directories, so its job names change whenever an app is added
+  # or removed. Renovate merges its own PRs once this passes.
+  result:
+    name: Lint result
+    if: always()
+    needs: [find, lint, shellcheck]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every lint job passed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: exit 1
