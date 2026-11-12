@@ -72,7 +72,11 @@ You have two options:
    screen, not the display name. With Advanced Mode on in your profile, it is shown under
    **Settings → People → Users**. Case does not matter.
 3. **Add the mapping to the add-on.** Open **Settings → Add-ons → Music Assistant Proxy →
-   Configuration**, choose **⋮ → Edit in YAML**, and add an `ma_users` list:
+   Configuration**. Under **Per-user sign-in**, add one entry per person with their
+   **Home Assistant username** and **Music Assistant token**, then **Save**. Entries can
+   be edited or removed there later.
+
+   If you prefer YAML, choose **⋮ → Edit in YAML** and add an `ma_users` list instead:
 
    ```yaml
    ma_users:
