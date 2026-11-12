@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.10.0
+
+- The panel is now visible to every Home Assistant user, not just administrators.
+  Each person signs in with their own Music Assistant account, so per-user accounts
+  and permissions keep working.
+- New `ma_users` option: map Home Assistant usernames to their own Music Assistant
+  tokens, and each person is signed in automatically as themselves. Each page only
+  carries the viewer's own token.
+- `ma_token` now covers only users not listed in `ma_users`. Because the panel is now
+  visible to everyone, a shared token reaches every Home Assistant user, and the
+  add-on warns about this at startup.
+- The proxy now accepts connections only from the Supervisor.
+
 ## 1.9.1
 
 - Removed config keys that only repeated Supervisor defaults, as flagged by the add-on

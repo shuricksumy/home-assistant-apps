@@ -63,50 +63,120 @@ envsubst '${UPSTREAM} ${INGRESS_PORT}' \
     > /etc/nginx/nginx.conf
 
 # Optional auto-login: drop a token straight into the page so nobody has to type
-# credentials. Without this you simply sign in once and the session is kept.
+# credentials. Without this each person signs in once and the session is kept.
+#
+# Tokens are chosen per Home Assistant user. The Supervisor sets
+# X-Remote-User-Name from the viewer's HA session on every ingress request, after
+# stripping any copy the browser sent, so it is safe to key on. ma_users maps a
+# username to that person's own token; ma_token, if set, covers everyone else.
 #
 # Two keys are written. "ma_access_token" is the one this MA reads on startup.
 # "ma_access_token_connection" does not exist in this version and is inert here,
 # but newer builds bind a saved token to a connection identity and refuse to
 # restore it without a match, so it is written for them -- computed exactly as
 # their createLocalConnectionIdentity does, from whatever URL served the page.
-: > /etc/nginx/inject.conf
-if bashio::config.has_value 'ma_token'; then
-    # Tokens are usually pasted, so strip any stray whitespace or newline. A
-    # trailing space silently invalidates the token and is impossible to see.
-    MA_TOKEN=$(bashio::config 'ma_token' | tr -d '[:space:]')
 
-    # Ask Music Assistant whether it actually accepts this token, so a bad one
-    # shows up here instead of as a login screen with no explanation.
-    # -k because nginx does not verify the upstream certificate either.
-    AUTH_CODE=$(curl -s -k -o /dev/null -w '%{http_code}' -m 10 \
-        -H "Authorization: Bearer ${MA_TOKEN}" \
+# Ask Music Assistant whether it accepts a token, so a bad one shows up here
+# instead of as a login screen with no explanation. -k because nginx does not
+# verify the upstream certificate either.
+check_token() {
+    local label=$1 token=$2 body code who
+    body=$(mktemp)
+    code=$(curl -s -k -o "${body}" -w '%{http_code}' -m 10 \
+        -H "Authorization: Bearer ${token}" \
         "${UPSTREAM}/auth/me" || true)
-
-    case "${AUTH_CODE}" in
+    case "${code}" in
         200)
-            bashio::log.info "Token accepted by Music Assistant, seeding the web UI session"
+            who=$(jq -r '.username // .display_name // empty' "${body}" 2>/dev/null || true)
+            bashio::log.info "${label}: token accepted${who:+ (Music Assistant user \"${who}\")}"
             ;;
         000|"")
-            bashio::log.warning "Could not reach Music Assistant at ${UPSTREAM} to verify the token."
-            bashio::log.warning "Seeding it anyway; check server_host and server_port if the panel stays empty."
+            bashio::log.warning "${label}: could not reach Music Assistant at ${UPSTREAM} to verify the token; using it anyway."
             ;;
         *)
-            bashio::log.error "Music Assistant rejected the token (HTTP ${AUTH_CODE})."
-            bashio::log.error "Create a fresh long-lived token in Music Assistant and paste it into ma_token."
-            bashio::log.error "Seeding it anyway, but the web UI will keep asking you to log in."
+            bashio::log.error "${label}: Music Assistant rejected the token (HTTP ${code})."
+            bashio::log.error "${label}: create a fresh long-lived token in Music Assistant and paste it in."
             ;;
     esac
+    rm -f "${body}"
+}
 
+# Tokens and usernames are written into nginx config and a script, so accept
+# only characters that need no quoting in either. Tokens are usually pasted,
+# so stray whitespace is stripped first: a trailing space silently invalidates
+# a token and is impossible to see.
+TOKEN_RE='^[A-Za-z0-9._-]+$'
+USER_RE='^[A-Za-z0-9._@+-]+$'
+
+FALLBACK_TOKEN=""
+if bashio::config.has_value 'ma_token'; then
+    FALLBACK_TOKEN=$(bashio::config 'ma_token' | tr -d '[:space:]')
+    if [[ ! "${FALLBACK_TOKEN}" =~ ${TOKEN_RE} ]]; then
+        bashio::log.error "ma_token contains unexpected characters; ignoring it."
+        FALLBACK_TOKEN=""
+    else
+        check_token "ma_token (everyone not in ma_users)" "${FALLBACK_TOKEN}"
+        bashio::log.warning "ma_token is given to every Home Assistant user not listed in ma_users,"
+        bashio::log.warning "and anyone it is given to can read it from the page. Prefer ma_users."
+    fi
+fi
+
+USER_COUNT=0
+{
+    # shellcheck disable=SC2016 # nginx variables, not shell ones
+    printf 'map $http_x_remote_user_name $ma_seed_token {\n'
+    printf '    default "%s";\n' "${FALLBACK_TOKEN}"
+} > /etc/nginx/users_map.conf
+
+declare -A SEEN_USERS=()
+ENTRIES=$(bashio::config 'ma_users|length' 2>/dev/null || echo 0)
+for ((i = 0; i < ENTRIES; i++)); do
+    HA_USER=$(bashio::config "ma_users[${i}].ha_user" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+    USER_TOKEN=$(bashio::config "ma_users[${i}].ma_token" | tr -d '[:space:]')
+
+    if [[ ! "${HA_USER}" =~ ${USER_RE} ]]; then
+        bashio::log.error "ma_users entry $((i + 1)): \"${HA_USER}\" is not a valid Home Assistant username; skipping."
+        continue
+    fi
+    if [[ -n "${SEEN_USERS[${HA_USER}]:-}" ]]; then
+        bashio::log.error "ma_users: ${HA_USER} is listed more than once; using the first entry."
+        continue
+    fi
+    if [[ ! "${USER_TOKEN}" =~ ${TOKEN_RE} ]]; then
+        bashio::log.error "ma_users: the token for ${HA_USER} is empty or has unexpected characters; skipping."
+        continue
+    fi
+
+    SEEN_USERS[${HA_USER}]=1
+    check_token "ma_users: ${HA_USER}" "${USER_TOKEN}"
+    printf '    "%s" "%s";\n' "${HA_USER}" "${USER_TOKEN}" >> /etc/nginx/users_map.conf
+    USER_COUNT=$((USER_COUNT + 1))
+done
+printf '}\n' >> /etc/nginx/users_map.conf
+
+# The script runs on every page load. With a token for this viewer it seeds the
+# session and marks it as seeded. Without one, it removes only a session this
+# proxy seeded earlier -- so on a shared browser the next person does not
+# inherit someone else's account -- and leaves a session they signed into
+# themselves alone.
+: > /etc/nginx/inject.conf
+if [ -n "${FALLBACK_TOKEN}" ] || [ "${USER_COUNT}" -gt 0 ]; then
     {
-        printf "sub_filter '</head>' '<script>(function(){try{var t=\"%s\";" "${MA_TOKEN}"
+        printf "sub_filter '</head>' '<script>(function(){try{var t=\"\$ma_seed_token\";"
+        printf 'var s=localStorage;'
+        printf 'if(t){'
         printf 'var p=location.pathname;while(p.length&&p.charAt(p.length-1)==="/"){p=p.slice(0,-1);}'
-        printf 'localStorage.setItem("ma_access_token",t);'
-        printf 'localStorage.setItem("ma_access_token_connection","local:"+location.protocol+"//"+location.host+p);'
+        printf 's.setItem("ma_access_token",t);'
+        printf 's.setItem("ma_access_token_connection","local:"+location.protocol+"//"+location.host+p);'
+        printf 's.setItem("ma_proxy_seeded","1");'
+        printf '}else if(s.getItem("ma_proxy_seeded")){'
+        printf 's.removeItem("ma_access_token");s.removeItem("ma_access_token_connection");s.removeItem("ma_proxy_seeded");'
+        printf '}'
         printf "}catch(e){}})();</script></head>';\n"
     } > /etc/nginx/inject.conf
+    bashio::log.info "Auto-login enabled for ${USER_COUNT} mapped user(s)${FALLBACK_TOKEN:+, plus ma_token for everyone else}"
 else
-    bashio::log.info "No ma_token set; you will sign in once and the session is kept"
+    bashio::log.info "No tokens set; each person signs in once and the session is kept"
 fi
 
 # Create required directories

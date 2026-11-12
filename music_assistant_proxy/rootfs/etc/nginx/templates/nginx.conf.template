@@ -34,8 +34,18 @@ http {
         '' close;
     }
 
+    # Which auto-login token, if any, each Home Assistant user gets. Generated at
+    # boot from ma_users and ma_token; html_entry.conf injects $ma_seed_token.
+    include /etc/nginx/users_map.conf;
+
     server {
         listen ${INGRESS_PORT} default_server;
+
+        # Only the Supervisor may connect. It is what strips and then sets the
+        # X-Remote-User-* headers the auto-login map trusts; anything else on the
+        # internal network could otherwise reach this port and send its own.
+        allow 172.30.32.2;
+        deny all;
 
         # MA's frontend registers a service worker that precaches the app shell,
         # answering navigations from Cache Storage without ever reaching this
