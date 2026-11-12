@@ -1,6 +1,6 @@
 {
   "name": "Music Assistant Proxy",
-  "version": "1.10.1",
+  "version": "1.10.2",
   "slug": "music_assistant_proxy",
   "description": "Music Assistant running on its own hardware, in your Home Assistant sidebar",
   "url": "https://github.com/shuricksumy/home-assistant-apps",

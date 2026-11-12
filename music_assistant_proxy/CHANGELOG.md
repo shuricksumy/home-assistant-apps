@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.10.2
+
+- Clearer per-user sign-in instructions in the README and docs: use the Home Assistant
+  **username**, not the display name, with how to find it and what to do when a user
+  has none. The form's help text for the username field says the same.
+
 ## 1.10.1
 
 - The Configuration form now shows readable names and help text for every option,

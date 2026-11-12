@@ -19,8 +19,8 @@ configuration:
       ha_user:
         name: Home Assistant username
         description: >-
-          The name typed at the Home Assistant login screen, not the display
-          name.
+          The Username column under Settings → People → Users (turn on Advanced
+          mode in your profile to see it). Not the display name.
       ma_token:
         name: Music Assistant token
         description: >-

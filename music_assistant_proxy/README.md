@@ -36,78 +36,104 @@ how signing in works, and what to expect when Music Assistant updates.
 | :-- | :-- | :-- |
 | `server_host` | `192.168.1.11` | Address of the Music Assistant server: an IP, a hostname, or a full URL such as `https://ma.example.com`. |
 | `server_port` | `8095` | Port of the Music Assistant web interface (`443` for an HTTPS URL). |
-| `ma_users` | _(empty)_ | Optional per-person auto-login: Home Assistant username → that person's Music Assistant token. See below. |
-| `ma_token` | _(empty)_ | Optional shared auto-login token for everyone not in `ma_users`. See below. |
+| `ma_users` | _(empty)_ | **Per-user sign-in.** Home Assistant *username* (not display name) → that person's Music Assistant token. See below. |
+| `ma_token` | _(empty)_ | **Shared token.** One token for everyone not in `ma_users`. Not recommended. |
 
 ## Several people, each with their own Music Assistant account
 
-The panel shows for every Home Assistant user, admins and standard users alike. What it
-cannot do on its own is sign each person into *their* Music Assistant account.
+The panel shows for every Home Assistant user. There are two ways to sign people in to
+Music Assistant:
 
-**Why a manual mapping is needed.** When Music Assistant runs as an add-on on the Home
-Assistant machine, it trusts Home Assistant to say who is signed in, so everyone lands in
-their own account automatically. That trust only exists on Home Assistant's internal
-network; Music Assistant checks it at the connection level, not just from a header. A
-server on its own hardware has no such link: it only trusts its own users and tokens.
-Home Assistant does still tell this add-on who opened the panel, so the add-on can hand
-Music Assistant the right token, but someone has to tell it which token belongs to whom.
+- **Each person signs in once.** Nothing to configure. Each person opens the panel and
+  signs in with their Music Assistant account. The session is kept per browser for 30
+  days and renews while it is used.
+- **Automatic sign-in per person.** Map each Home Assistant user to their own Music
+  Assistant token, and nobody has to sign in. Set it up as below.
+
+### Why the mapping is manual
+
+When Music Assistant runs as an add-on on the Home Assistant machine, it trusts Home
+Assistant to say who is signed in. That trust only works on Home Assistant's internal
+network, so a Music Assistant on its own hardware cannot use it: it only trusts its own
+users and tokens. Home Assistant does tell this add-on who opened the panel, so the add-on
+can pass Music Assistant the right token. You tell it which token belongs to whom.
 
 <img src="https://raw.githubusercontent.com/shuricksumy/home-assistant-apps/main/music_assistant_proxy/images/ma-users-flow.svg" alt="Anna opens the panel; Home Assistant tells the add-on she is signed in; the add-on looks up anna in ma_users and passes her token to Music Assistant, which signs her in as anna" width="880">
 
-You have two options:
+### Which username to use
 
-- **Each person signs in once.** Leave the token options empty. Each person opens the
-  panel and signs in with their Music Assistant account. The session is kept per browser
-  for 30 days and renews while it is used.
-- **Map Home Assistant users to Music Assistant tokens.** Nobody has to sign in. Set it up
-  as below.
+Use the **Username**, not the **Display name**. Home Assistant tells the add-on who opened
+the panel by username, so a display name never matches.
 
-**Setting up the mapping**
+To see usernames:
+
+1. Open your profile (your name, bottom left) and turn on **Advanced mode**.
+2. Go to **Settings → People → Users**.
+3. Copy the value from the **Username** column.
+
+| Display name | Username | What to put in `ha_user` |
+| :-- | :-- | :-- |
+| Alex Smith | `alex` | `alex` |
+| Anna Smith | `anna` | `anna` |
+| Kid's tablet | — | nothing yet, see below |
+
+Putting `Alex Smith` (the display name) in `ha_user` does not work.
+
+**Username shows "—"?** That user has no login, so they cannot open the panel at all. Open
+them under **Settings → People**, turn on **Allow person to login**, set a username and
+password, and use that username.
+
+Capital letters do not matter: `Alex` and `alex` are the same.
+
+### Set it up
 
 1. **Create a token for each person in Music Assistant.** Sign in to Music Assistant *as
    that person*, open the profile settings, create a **long-lived token**, and copy it.
-   The token decides which Music Assistant account they get, so it must come from their
-   own account.
-2. **Find each person's Home Assistant username.** It is the name typed at the login
-   screen, not the display name. With Advanced Mode on in your profile, it is shown under
-   **Settings → People → Users**. Case does not matter.
-3. **Add the mapping to the add-on.** Open **Settings → Add-ons → Music Assistant Proxy →
-   Configuration**. Under **Per-user sign-in**, add one entry per person with their
-   **Home Assistant username** and **Music Assistant token**, then **Save**. Entries can
-   be edited or removed there later.
+   The token decides which Music Assistant account they land in, so it must come from
+   their own account.
+2. **Find each person's Home Assistant username,** as described above.
+3. **Add them to the add-on.** Open **Settings → Add-ons → Music Assistant Proxy →
+   Configuration**. Under **Per-user sign-in**, add one entry per person:
+   - **Home Assistant username:** the username from step 2
+   - **Music Assistant token:** the token from step 1
 
-   If you prefer YAML, choose **⋮ → Edit in YAML** and add an `ma_users` list instead:
-
-   ```yaml
-   ma_users:
-     - ha_user: alex
-       ma_token: "<alex's long-lived token>"
-     - ha_user: anna
-       ma_token: "<anna's long-lived token>"
-   ```
-
-   <img src="https://raw.githubusercontent.com/shuricksumy/home-assistant-apps/main/music_assistant_proxy/images/ma-users-config.svg" alt="The add-on Configuration tab in YAML mode with ma_users listing alex and anna, each with a token" width="640">
-
-   Only Home Assistant admins can open this tab, so the list of tokens is not visible to
-   anyone else.
-4. **Save and restart the add-on,** then open the **Log** tab. Every entry is checked
-   against Music Assistant:
+   Then **Save**. Only Home Assistant admins can open this tab, so nobody else can see the
+   tokens.
+4. **Restart the add-on** and open its **Log** tab. Each token is checked against Music
+   Assistant:
 
    ```
    ma_users: alex: token accepted (Music Assistant user "alex")
    ma_users: anna: Music Assistant rejected the token (HTTP 401).
    ```
 
-   A rejected token, a misspelt username or a duplicate entry is reported there.
-5. **Each person opens the Music Assistant panel** and lands in their own account.
+   A rejected token needs to be created again. The log cannot tell whether a *username* is
+   right, so check those against the Users page.
+5. **Test it.** Each person opens the Music Assistant panel and should land in their own
+   account without signing in. If someone gets the login page instead, their username is
+   misspelt or is a display name.
 
-People who are not listed get the normal Music Assistant login page. When a person is
-added or removed, or their token changes, edit the list and restart the add-on.
+When a person is added or removed, or a token changes, edit the list and restart the
+add-on.
 
-The add-on still accepts a single shared `ma_token`, but it signs every unlisted person in
-as the one Music Assistant user who owns it, and anyone it is given to can read it from the
-page. In a shared household, use `ma_users` instead. [The add-on docs](DOCS.md#auto-login)
-have the details.
+Prefer YAML? Choose **⋮ → Edit in YAML** in the Configuration tab:
+
+```yaml
+ma_users:
+  - ha_user: alex
+    ma_token: "<alex's long-lived token>"
+  - ha_user: anna
+    ma_token: "<anna's long-lived token>"
+```
+
+<img src="https://raw.githubusercontent.com/shuricksumy/home-assistant-apps/main/music_assistant_proxy/images/ma-users-config.svg" alt="The add-on Configuration tab in YAML mode with ma_users listing alex and anna, each with a token" width="640">
+
+### Shared token (not recommended)
+
+The **Shared token** option (`ma_token`) signs everyone *not* in the list in as the one
+Music Assistant user who owns it, and anyone it reaches can read it from the page source.
+In a shared household, leave it empty. [The add-on docs](DOCS.md#auto-login) have the
+details.
 
 ## License
 

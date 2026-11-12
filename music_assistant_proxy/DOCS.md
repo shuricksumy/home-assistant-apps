@@ -10,8 +10,8 @@ Assistant sidebar via Ingress.
 | ------------- | -------------------------------------------------------------------- |
 | `server_host` | Address of the Music Assistant server: an IP, a hostname, or a full URL such as `https://ma.example.com` |
 | `server_port` | Port of the Music Assistant web interface (default `8095`, or `443` for an HTTPS URL) |
-| `ma_token`    | Optional shared token for auto-login, see below                      |
-| `ma_users`    | Optional per-person auto-login: Home Assistant user → Music Assistant token |
+| `ma_users`    | **Per-user sign-in.** Home Assistant *username* (not display name) → that person's Music Assistant token. See [Auto-login](#auto-login) |
+| `ma_token`    | **Shared token.** One token for everyone not in `ma_users`. Not recommended |
 
 A hostname is resolved once when nginx starts. If your server's IP changes, restart the
 add-on.
@@ -80,9 +80,67 @@ the sign-in succeeds and the last step fails.
 
 ### Auto-login
 
-The panel is visible to every Home Assistant user. Without tokens, each person signs in
-once as described above. To skip that, give the add-on a Music Assistant token per person
-and it signs each of them in as their own Music Assistant user:
+Without tokens, each person signs in once as described above. To skip that, map each Home
+Assistant user to their own Music Assistant token in **Per-user sign-in** (`ma_users`).
+Each person is then signed in automatically as their own Music Assistant user.
+
+#### Which username to use
+
+Use the **Username**, not the **Display name**. Home Assistant tells the add-on who opened
+the panel by username, so a display name never matches.
+
+To see usernames:
+
+1. Open your profile (your name, bottom left) and turn on **Advanced mode**.
+2. Go to **Settings → People → Users**.
+3. Copy the value from the **Username** column.
+
+| Display name | Username | What to put in `ha_user` |
+| :-- | :-- | :-- |
+| Alex Smith | `alex` | `alex` |
+| Anna Smith | `anna` | `anna` |
+| Kid's tablet | — | nothing yet, see below |
+
+Putting `Alex Smith` (the display name) in `ha_user` does not work.
+
+**Username shows "—"?** That user has no login, so they cannot open the panel at all. Open
+them under **Settings → People**, turn on **Allow person to login**, set a username and
+password, and use that username.
+
+Capital letters do not matter: `Alex` and `alex` are the same.
+
+#### Set it up
+
+1. **Create a token for each person in Music Assistant.** Sign in to Music Assistant *as
+   that person*, open the profile settings, create a **long-lived token**, and copy it.
+   The token decides which Music Assistant account they land in, so it must come from
+   their own account.
+2. **Find each person's Home Assistant username,** as described above.
+3. **Add them to the add-on.** Open **Settings → Add-ons → Music Assistant Proxy →
+   Configuration**. Under **Per-user sign-in**, add one entry per person:
+   - **Home Assistant username:** the username from step 2
+   - **Music Assistant token:** the token from step 1
+
+   Then **Save**. Only Home Assistant admins can open this tab, so nobody else can see the
+   tokens.
+4. **Restart the add-on** and open its **Log** tab. Each token is checked against Music
+   Assistant:
+
+   ```
+   ma_users: alex: token accepted (Music Assistant user "alex")
+   ma_users: anna: Music Assistant rejected the token (HTTP 401).
+   ```
+
+   A rejected token needs to be created again. The log cannot tell whether a *username* is
+   right, so check those against the Users page.
+5. **Test it.** Each person opens the Music Assistant panel and should land in their own
+   account without signing in. If someone gets the login page instead, their username is
+   misspelt or is a display name.
+
+When a person is added or removed, or a token changes, edit the list and restart the
+add-on.
+
+Prefer YAML? Choose **⋮ → Edit in YAML** in the Configuration tab:
 
 ```yaml
 ma_users:
@@ -90,20 +148,6 @@ ma_users:
     ma_token: "<alex's long-lived token>"
   - ha_user: anna
     ma_token: "<anna's long-lived token>"
-```
-
-- **`ha_user`** is the Home Assistant *username*, the name typed at the login screen, not
-  the display name. It is shown under Settings → People → Users with Advanced Mode on.
-  Case does not matter.
-- **`ma_token`** is a long-lived token created in Music Assistant while signed in as that
-  person: open your profile settings, create a **long-lived token**, and paste it in.
-
-Restart the add-on after editing. At startup it checks each token against the server and
-logs the result, so a bad one reports itself instead of showing a login screen:
-
-```
-ma_users: alex: token accepted (Music Assistant user "alex")
-ma_users: anna: Music Assistant rejected the token (HTTP 401).
 ```
 
 How the person is recognised: Home Assistant ingress passes the signed-in user to the
