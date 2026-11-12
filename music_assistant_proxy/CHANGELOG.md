@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.10.1
+
+- The Configuration form now shows readable names and help text for every option,
+  and lists per-user sign-in above the shared token. The user mapping can be added
+  and edited in the form without switching to YAML.
+
 ## 1.10.0
 
 - The panel is now visible to every Home Assistant user, not just administrators.

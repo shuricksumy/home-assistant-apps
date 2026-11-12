@@ -1,0 +1,34 @@
+configuration:
+  server_host:
+    name: Music Assistant server
+    description: >-
+      IP address, hostname, or full URL (such as https://ma.example.com) of your
+      Music Assistant server.
+  server_port:
+    name: Port
+    description: >-
+      Port of the Music Assistant web interface. Usually 8095, or 443 for an
+      HTTPS URL. Ignored when the server address already includes a port.
+  ma_users:
+    name: Per-user sign-in
+    description: >-
+      Sign each Home Assistant user in to their own Music Assistant account.
+      Add one entry per person, then restart the add-on. People not listed get
+      the normal Music Assistant login page.
+    fields:
+      ha_user:
+        name: Home Assistant username
+        description: >-
+          The name typed at the Home Assistant login screen, not the display
+          name.
+      ma_token:
+        name: Music Assistant token
+        description: >-
+          A long-lived token created in Music Assistant while signed in as this
+          person (profile settings).
+  ma_token:
+    name: Shared token (not recommended)
+    description: >-
+      Signs everyone not listed above in as the single Music Assistant user who
+      owns this token, and they can read it from the page. Leave empty in a
+      shared household.
