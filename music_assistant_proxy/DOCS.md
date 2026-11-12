@@ -10,7 +10,8 @@ Assistant sidebar via Ingress.
 | ------------- | -------------------------------------------------------------------- |
 | `server_host` | Address of the Music Assistant server: an IP, a hostname, or a full URL such as `https://ma.example.com` |
 | `server_port` | Port of the Music Assistant web interface (default `8095`, or `443` for an HTTPS URL) |
-| `ma_token`    | Optional long-lived token for auto-login, see below                  |
+| `ma_token`    | Optional shared token for auto-login, see below                      |
+| `ma_users`    | Optional per-person auto-login: Home Assistant user → Music Assistant token |
 
 A hostname is resolved once when nginx starts. If your server's IP changes, restart the
 add-on.
@@ -79,30 +80,51 @@ the sign-in succeeds and the last step fails.
 
 ### Auto-login
 
-Set `ma_token` to skip the sign-in entirely. In Music Assistant, open your profile
-settings, create a **long-lived token**, paste it into `ma_token`, and restart the
-add-on. The proxy writes it into the page on every load.
+The panel is visible to every Home Assistant user. Without tokens, each person signs in
+once as described above. To skip that, give the add-on a Music Assistant token per person
+and it signs each of them in as their own Music Assistant user:
 
-The add-on checks the token against the server at startup and says so in its log, so a
-bad token reports itself instead of silently showing a login screen:
+```yaml
+ma_users:
+  - ha_user: alex
+    ma_token: "<alex's long-lived token>"
+  - ha_user: anna
+    ma_token: "<anna's long-lived token>"
+```
+
+- **`ha_user`** is the Home Assistant *username*, the name typed at the login screen, not
+  the display name. It is shown under Settings → People → Users with Advanced Mode on.
+  Case does not matter.
+- **`ma_token`** is a long-lived token created in Music Assistant while signed in as that
+  person: open your profile settings, create a **long-lived token**, and paste it in.
+
+Restart the add-on after editing. At startup it checks each token against the server and
+logs the result, so a bad one reports itself instead of showing a login screen:
 
 ```
-Token accepted by Music Assistant, seeding the web UI session
-Music Assistant rejected the token (HTTP 401). Create a fresh long-lived token...
-Could not reach Music Assistant at <host>:<port> to verify the token.
+ma_users: alex: token accepted (Music Assistant user "alex")
+ma_users: anna: Music Assistant rejected the token (HTTP 401).
 ```
 
-> **Note on access.** Leaving `ma_token` empty is the safer default, and is why it ships
-> empty. A seeded token is not just an auto-login: it is written into the page, so anyone
-> who can open the panel can read it out of the page source and then use it directly
+How the person is recognised: Home Assistant ingress passes the signed-in user to the
+add-on in an `X-Remote-User-Name` header. The Supervisor strips any copy the browser sends
+and sets it itself, and the add-on only accepts connections from the Supervisor, so the
+header cannot be forged from the browser.
+
+Each page only ever carries the token of the person viewing it. People not listed get the
+normal login page. On a shared browser, a session the add-on seeded for one person is
+cleared when someone without a token opens the panel; a session someone signed into
+themselves is left alone.
+
+**Shared `ma_token`.** Setting `ma_token` gives that one token to everyone *not* listed in
+`ma_users`, so they all act as the single Music Assistant user who owns it.
+
+> **Note on access.** A seeded token is not just an auto-login: it is written into the
+> page, so whoever receives it can read it out of the page source and use it directly
 > against the Music Assistant server — outside Home Assistant entirely, past its login and
-> past removing that person's Home Assistant account. Signing in individually keeps each
-> person's access tied to their own Music Assistant account instead.
->
-> The panel is restricted to administrators, which is the Supervisor default. To let
-> everyone in the household reach it, add `"panel_admin": false` to the add-on config —
-> and prefer individual sign-in over a shared token when you do, since that widens who
-> could extract it.
+> past removing that person's Home Assistant account. With `ma_users` each person only
+> ever sees their own token. A shared `ma_token` reaches every Home Assistant user, so in a
+> household prefer `ma_users`, or leave both empty and sign in individually.
 
 ### One login per address
 

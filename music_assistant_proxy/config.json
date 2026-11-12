@@ -1,6 +1,6 @@
 {
   "name": "Music Assistant Proxy",
-  "version": "1.9.1",
+  "version": "1.10.0",
   "slug": "music_assistant_proxy",
   "description": "Music Assistant running on its own hardware, in your Home Assistant sidebar",
   "url": "https://github.com/shuricksumy/home-assistant-apps",
@@ -13,15 +13,23 @@
   "ingress_stream": true,
   "panel_icon": "mdi:music",
   "panel_title": "Music Assistant",
+  "panel_admin": false,
   "options": {
     "server_host": "192.168.1.11",
     "server_port": 8095,
-    "ma_token": ""
+    "ma_token": "",
+    "ma_users": []
   },
   "schema": {
     "server_host": "str",
     "server_port": "port",
-    "ma_token": "password?"
+    "ma_token": "password?",
+    "ma_users": [
+      {
+        "ha_user": "str",
+        "ma_token": "password"
+      }
+    ]
   },
   "timeout": 30
 }
