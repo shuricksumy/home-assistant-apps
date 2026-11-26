@@ -1,4 +1,4 @@
-ARG BUILD_FROM=ghcr.io/hassio-addons/base:21.0.11@sha256:79fd58d9d7f2820e8b2e7d2b11a24e22b96ae7a48569af3372183592a1b22974
+ARG BUILD_FROM=ghcr.io/hassio-addons/base:21.1.0@sha256:ce73287a53cc08874e5fa8e3fe3e9aac098171c40326c0d384e93a5761e067b2
 FROM ${BUILD_FROM}
 
 RUN apk add --no-cache \
